@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mind Sync</title>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Hanken+Grotesk:wght@400;600;700&display=swap">
+<style>
+/* Layout idea: a night-blue table. Status bar on top, the shared pile in the middle, your hand docked at the bottom. */
+:root{
+  --bg:#0d1530;
+  --panel:#17224a;
+  --card:#f1f3fb;
+  --ink:#101a3a;
+  --star:#f4b942;
+  --life:#ff6f8e;
+  --ok:#63d8a8;
+  --mut:#9aa7d4;
+  --line:rgba(255,255,255,.14);
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  --body:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:var(--body);font-size:16px;-webkit-tap-highlight-color:transparent}
+body{background:radial-gradient(120% 80% at 50% 30%,#18265a 0%,var(--bg) 70%)}
+#app{height:100%;display:flex;flex-direction:column;max-width:720px;margin:0 auto;padding:max(10px,env(safe-area-inset-top)) 16px max(12px,env(safe-area-inset-bottom))}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--star);outline-offset:2px}
+.hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0 10px}
+.lvl{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.01em}
+.lvl small{font-family:var(--body);font-weight:600;font-size:13px;color:var(--mut);margin-left:6px}
+.stats{display:flex;gap:14px;align-items:center}
+.stat{display:flex;align-items:center;gap:3px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat svg{width:20px;height:20px}
+.stat.life svg{fill:var(--life)}
+.stat.star svg{fill:var(--star)}
+.stat .x{color:var(--mut);font-size:13px;margin-left:4px}
+.status{color:var(--mut);font-size:15px;text-align:center;min-height:22px;margin:2px 0 8px;text-wrap:balance}
+.table{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;overflow:auto}
+.players{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:7px 12px;min-width:92px;display:flex;flex-direction:column;gap:3px}
+.chip b{font-size:14px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip .sub{font-size:12px;color:var(--mut);display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.chip.me{border-color:rgba(244,185,66,.6)}
+.chip .vote{width:14px;height:14px;fill:var(--star)}
+.chip .ok{color:var(--ok)}
+.pile{--cw:112px;position:relative;width:200px;height:220px;display:grid;place-items:center;border-radius:28px;border:2px dashed var(--line);transition:border-color .15s,background .15s}
+.pile.hot{border-color:var(--star);background:rgba(244,185,66,.08)}
+.pile .hint{color:var(--mut);font-size:14px;text-align:center;padding:0 24px}
+.pile .card{position:absolute;cursor:default}
+.pile .by{position:absolute;bottom:-26px;left:0;right:0;text-align:center;font-size:13px;color:var(--mut)}
+.pile.shake{animation:shake .45s}
+@keyframes shake{20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+.discards{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;max-width:380px;font-size:12px;color:var(--mut)}
+.discards span.d{background:rgba(255,255,255,.08);border-radius:6px;padding:2px 7px;font-variant-numeric:tabular-nums;text-decoration:line-through}
+.toast{position:fixed;left:16px;right:16px;top:max(64px,calc(env(safe-area-inset-top) + 56px));margin:0 auto;max-width:420px;padding:12px 16px;border-radius:14px;background:var(--panel);border:1px solid var(--line);box-shadow:0 12px 30px rgba(0,0,0,.45);font-weight:600;text-align:center;z-index:5;animation:pop .25s}
+.toast.miss{border-color:var(--life);background:#3a1830}
+.toast.good{border-color:var(--ok)}
+.toast.star{border-color:var(--star)}
+@keyframes pop{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.err{background:#3a1830;border:1px solid var(--life);border-radius:12px;padding:10px 14px;font-size:14px;margin-bottom:8px}
+.dock{padding-top:10px;display:flex;flex-direction:column;gap:10px}
+.hand{--cw:84px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding-top:16px;max-height:236px;overflow-y:auto;min-height:110px}
+.hand.s2{--cw:66px}
+.hand.s3{--cw:54px;gap:6px}
+.card{width:var(--cw);height:calc(var(--cw) * 1.45);background:var(--card);color:var(--ink);border-radius:10px;border:1px solid rgba(16,26,58,.12);box-shadow:0 2px 0 rgba(0,0,0,.25),0 8px 18px rgba(0,0,0,.3);display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:calc(var(--cw) * .46);line-height:1;position:relative;touch-action:none;user-select:none;-webkit-user-select:none;transition:transform .15s}
+.card::before,.card::after{content:attr(data-c);position:absolute;font-size:calc(var(--cw) * .17);font-weight:600;opacity:.55}
+.card::before{top:5px;left:7px}
+.card::after{bottom:5px;right:7px;transform:rotate(180deg)}
+.hand .card{cursor:grab}
+.hand .card.sel{transform:translateY(-14px);outline:3px solid var(--star)}
+.hand .card.lifted{opacity:.2}
+.hand.locked .card{cursor:default;opacity:.9}
+.ghost{position:fixed;left:0;top:0;z-index:20;pointer-events:none;transform-origin:center;box-shadow:0 18px 40px rgba(0,0,0,.5)}
+.actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.btn{border:0;border-radius:14px;padding:13px 20px;font-weight:700;background:var(--panel);border:1px solid var(--line);min-height:48px}
+.btn.primary{background:var(--star);color:#241a00;border-color:transparent}
+.btn.star.on{background:rgba(244,185,66,.18);border-color:var(--star);color:var(--star)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.link{background:none;border:0;color:var(--mut);text-decoration:underline;padding:6px;font-size:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.panel h1{font-family:var(--display);font-size:30px;margin:0;line-height:1.1;text-wrap:balance}
+.panel h2{font-family:var(--display);font-size:24px;margin:0;text-wrap:balance}
+.panel p{margin:0;color:var(--mut);line-height:1.5}
+.center{margin:auto 0;display:flex;flex-direction:column;gap:14px}
+input[type=text]{font:inherit;width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--line);background:#0d1530;color:#fff}
+.roster{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.roster li{display:flex;justify-content:space-between;background:rgba(255,255,255,.06);padding:10px 14px;border-radius:10px}
+.roster li span{color:var(--mut);font-size:13px}
+details{color:var(--mut);font-size:14px;line-height:1.5}
+details summary{cursor:pointer}
+details ul{margin:8px 0 0;padding-left:18px}
+.end{text-align:center}
+.note{margin:10px 0 0;font-size:12px;color:var(--mut);text-align:center;opacity:.8}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+"use strict";
+/* ---------- constants ---------- */
+const STAR_LEVELS=[2,5,8];   // finishing these levels earns a throwing star
+const LIFE_LEVELS=[3,6,9];   // finishing these levels earns a life
+const MAX_LIVES=5, MAX_STARS=3;
+const LEVELS_BY_COUNT={2:12,3:10,4:8};
+
+const NOTE='<p class="note">Fan-made, non-commercial project for playing with friends. Not affiliated with or endorsed by the makers of any published card game.</p>';
+const ICON_HEART='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.5-9.2C1.2 8.6 3 5 6.5 5c2 0 3.5 1.1 5.5 3 2-1.9 3.5-3 5.5-3C21 5 22.8 8.6 21.5 11.8 19.5 16.4 12 21 12 21z"/></svg>';
+const ICON_STAR='<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,2 15,9 22,9.3 16.5,14 18.3,21 12,17 5.7,21 7.5,14 2,9.3 9,9"/></svg>';
+
+/* ---------- state ---------- */
+let uid=null;
+try{uid=localStorage.getItem('mindsync-uid')}catch(e){}
+if(!uid){uid='u'+Math.random().toString(36).slice(2,9)+Math.random().toString(36).slice(2,9);try{localStorage.setItem('mindsync-uid',uid)}catch(e){}}
+let S=null;                 // shared game state (host writes it)
+let P={};                   // one doc per player (each player writes their own)
+let room='',client=null,connected=false,myDoc=null,pendingCreate=false,shareMsg='';
+const BROKERS=['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://test.mosquitto.org:8081'];
+const loaded={s:false,p:false};
+let fatal=null,slow=false,errMsg='',confirmTake=false;
+let selected=null,drag=null,dragging=false,renderQueued=false;
+const pending=new Set();
+let lastEvent;              // undefined until first state arrives
+let toast=null,toastTimer=null;
+let myN=0;
+let nameDraft='';
+try{nameDraft=localStorage.getItem('mindsync-name')||''}catch(e){}
+
+const $app=document.getElementById('app');
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clone=o=>JSON.parse(JSON.stringify(o));
+const rid=()=>Math.random().toString(36).slice(2,9);
+const isHost=()=>!!(S&&S.hostId===uid);
+
+/* ---------- writes ---------- */
+let myChain=Promise.resolve();
+function myWrite(fn){
+  myChain=myChain.then(fn).catch(showErr);
+  return myChain;
+}
+let hostChain=Promise.resolve();
+function hostRun(fn){
+  hostChain=hostChain.then(fn).catch(showErr);
+  return hostChain;
+}
+let errTimer=null;
+function showErr(e){
+  console.error(e);
+  const code=e&&e.code;
+  errMsg=(e&&e.message&&!e.code)?e.message
+    :'Something went wrong talking to the game ('+((e&&e.message)||'unknown')+'). Your move may not have gone through.';
+  clearTimeout(errTimer);errTimer=setTimeout(()=>{errMsg='';render()},8000);
+  render();
+}
+
+/* ---------- relay: MQTT over WebSocket on a free public broker ---------- */
+let slowTimer=null;
+function startSlowTimer(){clearTimeout(slowTimer);slow=false;slowTimer=setTimeout(()=>{slow=true;render()},10000)}
+const topicBase=()=>'mindsync/v1/'+room+'/';
+function pub(topic,obj){
+  return new Promise((res,rej)=>{
+    if(!client){rej({message:'Not connected to the table yet.'});return}
+    const t=setTimeout(res,10000);
+    client.publish(topic,obj==null?'':JSON.stringify(obj),{qos:1,retain:true},err=>{clearTimeout(t);err?rej(err):res()});
+  });
+}
+function publishState(s){return pub(topicBase()+'state',s)}
+function setMyDoc(doc){myDoc=doc;P[uid]=doc;render();return pub(topicBase()+'p/'+uid,doc)}
+function updateMyDoc(patch){
+  const cur=myDoc||P[uid];
+  if(!cur)return Promise.reject({message:'Join the table first.'});
+  return setMyDoc(Object.assign({},cur,patch));
+}
+function handleState(d){
+  if(d&&S&&d.gid===S.gid&&(d.rev||0)<(S.rev||0))return;
+  S=d;
+  if(!d)lastEvent=undefined;
+  if(S){
+    handleEvent();
+    const mine=(S.hands&&S.hands[uid])||[];
+    for(const c of [...pending])if(!mine.includes(c))pending.delete(c);
+    if(selected!=null&&!mine.includes(selected))selected=null;
+  }
+  render();hostTick();
+}
+function onMsg(topic,buf){
+  const base=topicBase();
+  if(topic.indexOf(base)!==0)return;
+  const t=topic.slice(base.length);
+  let txt=buf.toString(),d=null;
+  if(txt){try{d=JSON.parse(txt)}catch(e){return}}
+  if(t==='state'){handleState(d)}
+  else if(t.indexOf('p/')===0){
+    const id=t.slice(2);
+    if(!d)delete P[id];
+    else if(id===uid&&myDoc)P[uid]=myDoc;
+    else P[id]=d;
+    if(id===uid){if(!myDoc&&d)myDoc=d;if(P[uid]&&P[uid].play&&P[uid].play.n>myN)myN=P[uid].play.n}
+    render();hostTick();
+  }
+}
+function connect(){
+  if(typeof mqtt==='undefined'){fatal='Could not load the connection library. Check your internet connection and reload.';render();return}
+  let bi=0,everConnected=false;
+  const base=topicBase();
+  function attempt(){
+    const c=mqtt.connect(BROKERS[bi%BROKERS.length],{clientId:'mind_'+Math.random().toString(36).slice(2,12),clean:true,keepalive:30,reconnectPeriod:2000,connectTimeout:8000});
+    client=c;
+    c.on('connect',()=>{
+      connected=true;
+      if(!everConnected){
+        everConnected=true;
+        c.subscribe([base+'state',base+'p/+'],{qos:1},err=>{
+          if(err){fatal='Could not join the table ('+err.message+'). Reload and try again.';render();return}
+          setTimeout(()=>{
+            loaded.s=true;loaded.p=true;clearTimeout(slowTimer);
+            if(pendingCreate){pendingCreate=false;createGame()}
+            render();hostTick();
+          },1200);
+        });
+      }
+      render();
+    });
+    c.on('message',(t,m)=>onMsg(t,m));
+    c.on('close',()=>{connected=false;render()});
+    c.on('error',e=>console.error(e));
+    setTimeout(()=>{if(!everConnected&&client===c){c.end(true);bi++;attempt()}},9000);
+  }
+  attempt();
+}
+const ROOM_CHARS='abcdefghjkmnpqrstuvwxyz23456789';
+function genRoom(){let r='';const a=new Uint32Array(8);(window.crypto||{getRandomValues:x=>x.forEach((_,i)=>x[i]=Math.random()*4e9)}).getRandomValues(a);for(const n of a)r+=ROOM_CHARS[n%ROOM_CHARS.length];return r}
+function shareUrl(){return location.href.split('#')[0]+'#'+room}
+async function shareLink(){
+  const url=shareUrl();
+  try{if(navigator.share){await navigator.share({title:'Mind Sync',text:'Join my table for a quiet card game',url});return}}catch(e){if(e&&e.name==='AbortError')return}
+  try{await navigator.clipboard.writeText(url);shareMsg='Link copied. Paste it into a message to your friends.'}
+  catch(e){shareMsg='Copy this link and send it to your friends: '+url}
+  render();
+}
+
+/* ---------- game logic (host only) ---------- */
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
+  return a;
+}
+function dealLevel(s){
+  const deck=shuffle(Array.from({length:100},(_,i)=>i+1));
+  s.hands={};
+  s.order.forEach(id=>{s.hands[id]=deck.splice(0,s.level).sort((a,b)=>a-b)});
+  s.pile=[];s.discards=[];
+  s.starRound=(s.starRound||0)+1;
+}
+function allEmpty(s){return s.order.every(id=>!(s.hands[id]&&s.hands[id].length))}
+function finishLevel(s){
+  const L=s.level;
+  let reward='';
+  if(STAR_LEVELS.includes(L)&&s.stars<MAX_STARS){s.stars++;reward='star'}
+  else if(LIFE_LEVELS.includes(L)&&s.lives<MAX_LIVES){s.lives++;reward='life'}
+  if(L>=s.maxLevel){
+    s.phase='won';
+    s.event={id:rid(),type:'won',level:L};
+    return;
+  }
+  s.level=L+1;
+  dealLevel(s);
+  s.phase='ready';
+  s.event={id:rid(),type:'level',level:L,reward};
+}
+function applyPlay(s,id,card){
+  const hand=s.hands[id]||[];
+  if(!hand.includes(card))return;
+  s.hands[id]=hand.filter(c=>c!==card);
+  s.pile.push({card,by:id});
+  const lower=[];
+  s.order.forEach(pid=>{(s.hands[pid]||[]).forEach(c=>{if(c<card)lower.push({card:c,by:pid})})});
+  if(lower.length){
+    lower.sort((a,b)=>a.card-b.card);
+    s.order.forEach(pid=>{s.hands[pid]=(s.hands[pid]||[]).filter(c=>c>card)});
+    lower.forEach(l=>s.discards.push({card:l.card,by:l.by}));
+    s.lives--;
+    s.event={id:rid(),type:'miss',by:id,card,lower};
+    if(s.lives<=0){s.lives=0;s.phase='lost';return}
+  }else{
+    s.event={id:rid(),type:'ok',by:id,card};
+  }
+  if(allEmpty(s))finishLevel(s);
+}
+function applyStar(s){
+  const out=[];
+  s.order.forEach(pid=>{
+    const h=s.hands[pid]||[];
+    if(h.length){const c=h[0];s.hands[pid]=h.slice(1);s.discards.push({card:c,by:pid,star:true});out.push({card:c,by:pid})}
+  });
+  s.stars--;
+  s.starRound=(s.starRound||0)+1;
+  s.event={id:rid(),type:'star',cards:out};
+  if(allEmpty(s))finishLevel(s);
+}
+let tickQueued=false;
+function hostTick(){
+  if(!isHost()||tickQueued)return;
+  tickQueued=true;
+  hostRun(async()=>{
+    tickQueued=false;
+    if(!isHost())return;
+    const s=clone(S);
+    let ch=false;
+    if(!s.processed)s.processed={};
+    const live=id=>P[id]&&P[id].gid===s.gid;
+    if(s.phase==='ready'){
+      const key=s.gid+':'+s.level;
+      if(s.order.every(id=>live(id)&&P[id].readyKey===key)){s.phase='playing';s.event={id:rid(),type:'go'};ch=true}
+    }
+    // consume play intents (ignored unless the game is in the playing phase)
+    const intents=[];
+    s.order.forEach(id=>{
+      const p=P[id];
+      if(live(id)&&p.play&&p.play.n>(s.processed[id]||0)){
+        intents.push({id,card:p.play.card,n:p.play.n});
+        s.processed[id]=p.play.n;ch=true;
+      }
+    });
+    if(s.phase==='playing'){
+      intents.sort((a,b)=>a.card-b.card);
+      for(const it of intents){
+        if(s.phase!=='playing')break;
+        applyPlay(s,it.id,it.card);
+      }
+    }
+    if(s.phase==='playing'&&s.stars>0&&s.order.every(id=>live(id)&&P[id].starVote===s.starRound)){
+      applyStar(s);ch=true;
+    }
+    if(ch){
+      s.rev=(S.rev||0)+1;
+      S=s;
+      handleEvent();
+      render();
+      await publishState(s);
+    }
+  });
+}
+
+/* ---------- actions ---------- */
+function cleanName(){
+  const el=document.getElementById('name');
+  const v=(el?el.value:nameDraft).trim().slice(0,16);
+  nameDraft=v;
+  try{localStorage.setItem('mindsync-name',v)}catch(e){}
+  return v;
+}
+function joinDoc(gid,name){
+  return {gid,name,joined:Date.now(),readyKey:'',starVote:-1,play:{card:0,n:0}};
+}
+function lobbyPlayers(){
+  if(!S)return [];
+  return Object.keys(P).filter(id=>P[id].gid===S.gid).map(id=>({id,name:P[id].name||'Player',joined:P[id].joined||0}))
+    .sort((a,b)=>a.joined-b.joined||(a.id<b.id?-1:1));
+}
+function createGame(){
+  const name=cleanName();if(!name){showErr({message:'Enter a name first.'});return}
+  if(!room){
+    room=genRoom();
+    try{history.replaceState(null,'','#'+room)}catch(e){}
+    pendingCreate=true;loaded.s=false;loaded.p=false;startSlowTimer();connect();render();return;
+  }
+  const gid=rid();
+  myN=0;
+  hostRun(async()=>{
+    await setMyDoc(joinDoc(gid,name));
+    const s={gid,phase:'lobby',hostId:uid,order:[],names:{},hands:{},pile:[],discards:[],processed:{},rev:((S&&S.rev)||0)+1,level:0,maxLevel:0,lives:0,stars:0,starRound:0,event:null};
+    S=s;render();
+    await publishState(s);
+  });
+}
+function joinGame(){
+  const name=cleanName();if(!name){showErr({message:'Enter a name first.'});return}
+  if(lobbyPlayers().length>=4){showErr({message:'The table is full (4 players).'});return}
+  myN=0;
+  myWrite(()=>setMyDoc(joinDoc(S.gid,name)));
+}
+function startGame(){
+  if(!isHost()||S.phase!=='lobby')return;
+  const list=lobbyPlayers().slice(0,4);
+  if(list.length<2)return;
+  const n=list.length;
+  const s={gid:S.gid,phase:'ready',hostId:uid,order:list.map(p=>p.id),names:{},maxLevel:LEVELS_BY_COUNT[n],level:1,lives:n,stars:1,hands:{},pile:[],discards:[],processed:{},starRound:0,event:{id:rid(),type:'level',level:0,reward:''},rev:(S.rev||0)+1};
+  list.forEach(p=>{s.names[p.id]=p.name});
+  dealLevel(s);
+  hostRun(async()=>{S=s;handleEvent();render();await publishState(s)});
+}
+function newGame(){
+  const name=nameDraft||(P[uid]&&P[uid].name)||'Player';
+  const gid=rid();
+  myN=0;
+  hostRun(async()=>{
+    await setMyDoc(joinDoc(gid,name));
+    const s={gid,phase:'lobby',hostId:uid,order:[],names:{},hands:{},pile:[],discards:[],processed:{},rev:((S&&S.rev)||0)+1,level:0,maxLevel:0,lives:0,stars:0,starRound:0,event:null};
+    S=s;render();
+    await publishState(s);
+  });
+}
+function takeOver(){
+  confirmTake=false;
+  hostRun(async()=>{
+    const s=clone(S);s.hostId=uid;s.rev=(S.rev||0)+1;
+    S=s;render();
+    await publishState(s);
+    hostTick();
+  });
+}
+function setReady(){
+  const key=S.gid+':'+S.level;
+  myWrite(()=>updateMyDoc({readyKey:key}));
+}
+function toggleStar(){
+  if(!S||S.phase!=='playing'||S.stars<1)return;
+  const mine=P[uid]&&P[uid].starVote===S.starRound;
+  myWrite(()=>updateMyDoc({starVote:mine?-1:S.starRound}));
+}
+function playCard(c){
+  if(!S||S.phase!=='playing'||pending.has(c))return;
+  if(!(S.hands[uid]||[]).includes(c))return;
+  pending.add(c);selected=null;
+  setTimeout(()=>{pending.delete(c);render()},5000);
+  const n=++myN;
+  try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}
+  myWrite(()=>updateMyDoc({play:{card:c,n}}));
+  render();
+}
+
+/* ---------- events / toast ---------- */
+const nm=id=>(S&&S.names&&S.names[id])||(P[id]&&P[id].name)||'Someone';
+function handleEvent(){
+  const ev=S&&S.event;
+  const id=ev?ev.id:null;
+  if(lastEvent===undefined){lastEvent=id;return}
+  if(id===lastEvent)return;
+  lastEvent=id;
+  if(!ev)return;
+  let msg='',cls='';
+  if(ev.type==='miss'){
+    const by={};ev.lower.forEach(l=>{(by[l.by]=by[l.by]||[]).push(l.card)});
+    const parts=Object.keys(by).map(k=>nm(k)+' still held '+by[k].join(', '));
+    msg=nm(ev.by)+' played '+ev.card+' too early. '+parts.join('; ')+'. Lost a life.';cls='miss';
+    try{navigator.vibrate&&navigator.vibrate([60,40,60])}catch(e){}
+  }else if(ev.type==='star'){
+    msg='Throwing star used. Discarded: '+ev.cards.map(c=>c.card).join(', ')+'.';cls='star';
+  }else if(ev.type==='level'&&ev.level>0){
+    msg='Level '+ev.level+' cleared.'+(ev.reward==='star'?' You earned a throwing star.':ev.reward==='life'?' You earned a life.':'');cls='good';
+  }else if(ev.type==='go'){
+    msg='Go. No talking.';
+  }
+  if(msg){
+    toast={msg,cls,type:ev.type};
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>{toast=null;render()},ev.type==='miss'?5500:3500);
+  }
+}
+
+/* ---------- views ---------- */
+function icons(svg,n){let s='';for(let i=0;i<n;i++)s+=svg;return s}
+function headerHtml(s){
+  return '<div class="hdr"><div class="lvl">Level '+s.level+'<small>of '+s.maxLevel+'</small></div>'
+   +'<div class="stats"><div class="stat life" title="Lives">'+ICON_HEART+'<span>'+s.lives+'</span></div>'
+   +'<div class="stat star" title="Throwing stars">'+ICON_STAR+'<span>'+s.stars+'</span></div></div></div>';
+}
+function connectView(){
+  return '<div class="center"><div class="panel"><h2>Connecting to the table</h2><p>'
+   +(slow?'This is taking a while. Check your connection. The game will appear as soon as it answers.':'One moment.')+'</p></div></div>';
+}
+function howTo(){
+  return '<details><summary>How it works</summary><ul>'
+   +'<li>Everyone gets as many cards as the level number.</li>'
+   +'<li>Play all cards from lowest to highest, together, with no talking and no signals.</li>'
+   +'<li>Nobody takes turns. Play a card when you feel it is time.</li>'
+   +'<li>If someone still holds a lower card, the team loses a life and those lower cards are discarded.</li>'
+   +'<li>A throwing star needs everyone to agree. Each player then discards their lowest card.</li>'
+   +'<li>Clear every level to win. Lose all lives and the game ends.</li></ul></details>';
+}
+function lobbyView(){
+  const list=lobbyPlayers();
+  const joined=!!(P[uid]&&P[uid].gid===S.gid);
+  const host=isHost();
+  let body='';
+  if(!joined){
+    body+='<input id="name" type="text" maxlength="16" placeholder="Your name" autocomplete="off" value="'+esc(nameDraft)+'">'
+      +'<button class="btn primary" data-act="join"'+(list.length>=4?' disabled':'')+'>'+(list.length>=4?'Table is full':'Join the table')+'</button>';
+  }else if(host){
+    body+='<button class="btn primary" data-act="start"'+(list.length<2?' disabled':'')+'>Start game</button>'
+      +'<p>'+(list.length<2?'Waiting for at least 2 players. Share this page with your friends.':'You can start now, or wait for up to '+(4-list.length)+' more.')+'</p>';
+  }else{
+    body+='<p>Waiting for '+esc((P[S.hostId]&&P[S.hostId].name)||'the host')+' to start the game.</p>';
+  }
+  const takeover=(joined&&!host)?'<button class="link" data-act="takeover-ask">Host has left? Take over as host</button>':'';
+  return '<div class="center"><div class="panel"><h1>Mind Sync</h1><p>Play your cards in ascending order, as a team, without a word.</p><div class="actions"><button class="btn" data-act="share">Share invite link</button></div>'+(shareMsg?'<p>'+esc(shareMsg)+'</p>':'')
+   +'<ul class="roster">'+(list.length?list.map(p=>'<li>'+esc(p.name)+'<span>'+(p.id===uid?'you':'')+(p.id===S.hostId?(p.id===uid?', host':'host'):'')+'</span></li>').join(''):'<li><span>No players yet</span></li>')+'</ul>'
+   +body+howTo()+takeover+NOTE+'</div>'+takeOverPrompt()+'</div>';
+}
+function takeOverPrompt(){
+  if(!confirmTake)return '';
+  return '<div class="panel"><p>Only take over if the current host has closed the page. Two hosts at once will confuse the game.</p><div class="actions"><button class="btn primary" data-act="takeover">Take over</button><button class="btn" data-act="takeover-cancel">Cancel</button></div></div>';
+}
+function emptyView(){
+  return '<div class="center"><div class="panel"><h1>Mind Sync</h1><p>'+(room?'Nobody has started a game at this table yet. Create one here.':'Start a table, then send the link to your friends. Up to 4 players.')+'</p>'
+   +'<input id="name" type="text" maxlength="16" placeholder="Your name" autocomplete="off" value="'+esc(nameDraft)+'">'
+   +'<button class="btn primary" data-act="create">Create game</button>'+howTo()+NOTE+'</div></div>';
+}
+function pileHtml(s){
+  const top=s.pile.slice(-3);
+  let cards='';
+  top.forEach((p,i)=>{
+    const depth=top.length-1-i;
+    const rot=depth===0?0:(depth===1?-7:6);
+    const off=depth===0?0:(depth===1?-10:10);
+    cards+='<div class="card" data-c="'+p.card+'" style="transform:translateX('+off+'px) rotate('+rot+'deg)">'+p.card+'</div>';
+  });
+  const last=s.pile[s.pile.length-1];
+  return '<div class="pile'+(toast&&toast.type==='miss'?' shake':'')+'" id="pile">'
+    +(cards||'<div class="hint">Drag a card here to play it</div>')
+    +(last?'<div class="by">'+esc(nm(last.by))+' &middot; '+s.pile.length+' played</div>':'')+'</div>';
+}
+function gameView(){
+  const s=S;
+  const inGame=s.order.includes(uid);
+  const playing=s.phase==='playing';
+  const hand=((s.hands&&s.hands[uid])||[]).filter(c=>!pending.has(c));
+  const key=s.gid+':'+s.level;
+  const iAmReady=P[uid]&&P[uid].readyKey===key;
+  let status='';
+  if(s.phase==='ready')status='Look at your cards, then tap Ready. Play begins when everyone is ready.';
+  else if(playing)status=inGame?'Play your lowest card when it feels right.':'You are watching this game.';
+  else if(s.phase==='won')status='';
+  else if(s.phase==='lost')status='';
+  const chips=s.order.map(id=>{
+    const n=(s.hands[id]||[]).length;
+    const voted=P[id]&&P[id].starVote===s.starRound&&playing;
+    const rd=P[id]&&P[id].readyKey===key;
+    let sub='<span>'+n+' card'+(n===1?'':'s')+'</span>';
+    if(s.phase==='ready')sub+=rd?'<span class="ok">Ready</span>':'<span>Waiting</span>';
+    if(voted)sub+='<svg class="vote" viewBox="0 0 24 24" aria-label="Voted for a throwing star"><polygon points="12,2 15,9 22,9.3 16.5,14 18.3,21 12,17 5.7,21 7.5,14 2,9.3 9,9"/></svg>';
+    return '<div class="chip'+(id===uid?' me':'')+'"><b>'+esc(nm(id))+(id===uid?' (you)':'')+'</b><div class="sub">'+sub+'</div></div>';
+  }).join('');
+  const disc=(s.discards||[]).slice(-14).map(d=>'<span class="d">'+d.card+'</span>').join('');
+  let end='';
+  if(s.phase==='won'){
+    end='<div class="panel end"><h2>You cleared all '+s.maxLevel+' levels</h2><p>One mind, everyone in sync.</p><button class="btn primary" data-act="new">Play again</button></div>';
+  }else if(s.phase==='lost'){
+    end='<div class="panel end"><h2>Out of lives on level '+s.level+'</h2><p>Take a breath and try again.</p><button class="btn primary" data-act="new">New game</button></div>';
+  }
+  const cls=hand.length>8?'s3':hand.length>4?'s2':'s1';
+  const handHtml=hand.map(c=>'<div class="card'+(selected===c?' sel':'')+'" data-c="'+c+'">'+c+'</div>').join('');
+  let actions='';
+  if(inGame&&s.phase==='ready'){
+    actions+=iAmReady?'<button class="btn" disabled>Waiting for the others</button>':'<button class="btn primary" data-act="ready">I am ready</button>';
+  }
+  if(inGame&&playing){
+    const voters=s.order.filter(id=>P[id]&&P[id].starVote===s.starRound).length;
+    const mine=P[uid]&&P[uid].starVote===s.starRound;
+    actions+='<button class="btn star'+(mine?' on':'')+'" data-act="star"'+(s.stars<1?' disabled':'')+'>Throwing star &middot; '+voters+'/'+s.order.length+' agree</button>';
+  }
+  const dockMsg=(inGame&&playing&&!hand.length&&!pending.size)?'<div class="status">You are out of cards. Wait for the others.</div>':'';
+  const takeover=(!isHost()&&inGame&&s.phase!=='won'&&s.phase!=='lost')?'<button class="link" data-act="takeover-ask">Take over as host</button>':'';
+  return headerHtml(s)
+   +'<div class="status">'+status+'</div>'
+   +'<div class="table">'+end
+   +'<div class="players">'+chips+'</div>'
+   +((s.phase==='playing'||s.phase==='ready')?pileHtml(s):'')
+   +(disc?'<div class="discards">Discarded: '+disc+'</div>':'')
+   +'</div>'
+   +'<div class="dock">'+dockMsg
+   +(inGame&&(s.phase==='ready'||playing)?'<div class="hand '+cls+(playing?'':' locked')+'" id="hand">'+handHtml+'</div>':'')
+   +'<div class="actions">'+actions+'</div>'+(takeover?'<div class="actions">'+takeover+'</div>':'')+takeOverPrompt()+'</div>';
+}
+function view(){
+  let h='';
+  if(errMsg)h+='<div class="err" role="alert">'+esc(errMsg)+'</div>';
+  if(toast)h+='<div class="toast '+toast.cls+'" role="status">'+esc(toast.msg)+'</div>';
+  if(fatal)return h+'<div class="center"><div class="panel"><h2>Cannot open the table</h2><p>'+esc(fatal)+'</p></div></div>';
+  if(room&&loaded.s&&!connected)h+='<div class="err" role="status">Connection lost. Reconnecting to the table...</div>';
+  if(!room)return h+emptyView();
+  if(!(loaded.s&&loaded.p))return h+connectView();
+  if(!S)return h+emptyView();
+  if(S.phase==='lobby')return h+lobbyView();
+  return h+gameView();
+}
+function render(){
+  if(dragging){renderQueued=true;return}
+  const act=document.activeElement;
+  const fid=act&&act.id;
+  const ss=act&&act.selectionStart;
+  $app.innerHTML=view();
+  if(fid){
+    const el=document.getElementById(fid);
+    if(el){el.focus();try{if(ss!=null)el.setSelectionRange(ss,ss)}catch(e){}}
+  }
+}
+
+/* ---------- input ---------- */
+document.addEventListener('input',e=>{if(e.target&&e.target.id==='name')nameDraft=e.target.value});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target&&e.target.id==='name'){
+    if(!S)createGame();else if(S.phase==='lobby')joinGame();
+  }
+});
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');
+  if(!b||b.disabled)return;
+  const a=b.dataset.act;
+  if(a==='create')createGame();
+  else if(a==='share')shareLink();
+  else if(a==='join')joinGame();
+  else if(a==='start')startGame();
+  else if(a==='ready')setReady();
+  else if(a==='star')toggleStar();
+  else if(a==='new')newGame();
+  else if(a==='takeover-ask'){confirmTake=true;render()}
+  else if(a==='takeover-cancel'){confirmTake=false;render()}
+  else if(a==='takeover')takeOver();
+});
+
+function overPile(x,y){
+  const p=document.getElementById('pile');if(!p)return false;
+  const r=p.getBoundingClientRect(),m=30;
+  return x>r.left-m&&x<r.right+m&&y>r.top-m&&y<r.bottom+m;
+}
+function aboveHand(y){
+  const h=document.getElementById('hand');if(!h)return false;
+  return y<h.getBoundingClientRect().top-30;
+}
+document.addEventListener('pointerdown',e=>{
+  if(!S||S.phase!=='playing')return;
+  const el=e.target.closest('#hand .card');
+  if(!el)return;
+  drag={el,c:+el.dataset.c,x:e.clientX,y:e.clientY,moved:false,ghost:null,id:e.pointerId};
+});
+document.addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.id)return;
+  if(!drag.moved){
+    if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<8)return;
+    drag.moved=true;dragging=true;
+    const r=drag.el.getBoundingClientRect();
+    const g=drag.el.cloneNode(true);
+    g.classList.remove('sel','lifted');g.classList.add('ghost');
+    g.style.width=r.width+'px';g.style.height=r.height+'px';
+    document.body.appendChild(g);
+    drag.ghost=g;drag.w=r.width;drag.h=r.height;
+    drag.el.classList.add('lifted');
+  }
+  drag.ghost.style.transform='translate('+(e.clientX-drag.w/2)+'px,'+(e.clientY-drag.h/2)+'px) rotate('+Math.max(-12,Math.min(12,(e.clientX-drag.x)/12))+'deg)';
+  const p=document.getElementById('pile');
+  if(p)p.classList.toggle('hot',overPile(e.clientX,e.clientY)||aboveHand(e.clientY));
+  e.preventDefault();
+},{passive:false});
+function endDrag(e,cancel){
+  if(!drag||e.pointerId!==drag.id)return;
+  const d=drag;drag=null;
+  if(d.moved){
+    d.ghost.remove();
+    dragging=false;
+    const p=document.getElementById('pile');if(p)p.classList.remove('hot');
+    if(!cancel&&(overPile(e.clientX,e.clientY)||aboveHand(e.clientY)))playCard(d.c);
+    else{d.el.classList.remove('lifted')}
+    renderQueued=false;render();
+  }else if(!cancel){
+    if(selected===d.c)playCard(d.c);
+    else{selected=d.c;render()}
+  }
+}
+document.addEventListener('pointerup',e=>endDrag(e,false));
+document.addEventListener('pointercancel',e=>endDrag(e,true));
+
+/* ---------- boot ---------- */
+window.addEventListener('hashchange',()=>location.reload());
+(function boot(){
+  const h=(location.hash||'').replace('#','').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,16);
+  if(h){room=h;startSlowTimer();connect()}
+  render();
+})();
+</script>
+</body>
+</html>
